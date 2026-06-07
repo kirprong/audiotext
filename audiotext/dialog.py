@@ -30,6 +30,18 @@ from .groq_whisper import GroqWhisperClient, RetryableError, NetworkError
 from .audio_capture import AudioCapture
 
 
+class NoFocusTextEdit(QTextEdit):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._editable = False
+        self.setReadOnly(True)
+
+    def setEditable(self, editable: bool) -> None:
+        self._editable = editable
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus if editable else Qt.FocusPolicy.NoFocus)
+        self.setReadOnly(not editable)
+
+
 # ─── AmplitudeBars ─────────────────────────────────────────────────────
 class AmplitudeBars(QWidget):
     BAR_COUNT = 10
@@ -217,13 +229,15 @@ class AudioDialog(QDialog):
             'QPushButton:hover{background:#27272A;color:#E4E4E7}'
         )
 
-        self._text_edit = QTextEdit()
+        self._text_edit = NoFocusTextEdit()
         self._text_edit.setFont(QFont('Segoe UI', 14))
         self._text_edit.setWordWrapMode(QTextOption.WrapMode.WordWrap)
         self._text_edit.setStyleSheet(
             'QTextEdit{background:#09090B;color:#FAFAFA;border:1px solid #3F3F46;border-top:none;border-radius:0 0 8px 8px;padding:8px}'
         )
         self._text_edit.setText('')
+        self._text_edit.setEditable(False)
+        self._text_edit.mouseDoubleClickEvent = self._text_edit_double_click
 
         self._error_widget = QWidget(self)
         self._error_widget.setObjectName('error_widget')
@@ -272,6 +286,14 @@ class AudioDialog(QDialog):
     # -- capture setup --
     def _setup_capture(self) -> None:
         self._audio_capture.set_timeout_callback(self._on_capture_timeout)
+
+    def showEvent(self, event) -> None:
+        self._text_edit.setEditable(False)
+        event.accept()
+
+    def focusOutEvent(self, event) -> None:
+        self._text_edit.setEditable(False)
+        event.accept()
 
     def _on_capture_timeout(self) -> None:
         if self._mic_state != self.MIC_REC:
@@ -450,4 +472,15 @@ class AudioDialog(QDialog):
 
     def _bar_mouse_release(self, event) -> None:
         self._drag_pos = None
+        event.accept()
+
+    def _text_edit_double_click(self, event) -> None:
+        self._text_edit.setEditable(True)
+        self._text_edit.setFocus()
+        cursor = self._text_edit.cursorForPosition(event.pos())
+        self._text_edit.setTextCursor(cursor)
+        event.accept()
+
+    def hideEvent(self, event) -> None:
+        self._text_edit.setEditable(False)
         event.accept()

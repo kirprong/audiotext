@@ -14,7 +14,7 @@ class NetworkError(Exception):
 
 class GroqWhisperClient:
     _URL = 'https://api.groq.com/openai/v1'
-    _MODEL = 'whisper-large-v3-turbo'
+    _MODEL = 'whisper-large-v3'
 
     def __init__(self, api_key: str):
         self.api_key = api_key
