@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
     QTextEdit,
     QFrame,
     QWidget,
+    QLabel,
 )
 
 from .groq_whisper import GroqWhisperClient, RetryableError, NetworkError
@@ -180,6 +181,7 @@ class AudioDialog(QDialog):
             | Qt.WindowType.Dialog
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setStyleSheet('QDialog{background:#18181B}')
         self.setMinimumSize(480, 300)
 
         self._bar = QFrame()
@@ -223,6 +225,29 @@ class AudioDialog(QDialog):
         self._text_edit.setStyleSheet(
             'QTextEdit{background:#09090B;color:#FAFAFA;border:1px solid #3F3F46;border-top:none;border-radius:0 0 8px 8px;padding:8px}'
         )
+        self._text_edit.setText('')
+
+        self._error_widget = QWidget(self)
+        self._error_widget.setObjectName('error_widget')
+        self._error_widget.setStyleSheet(
+            '#error_widget{background:#27272A;border-radius:6px}'
+        )
+        error_layout = QHBoxLayout(self._error_widget)
+        error_layout.setContentsMargins(12, 8, 12, 8)
+        self._error_widget_label = QLabel('')
+        self._error_widget_label.setObjectName('error_label')
+        self._error_widget_label.setStyleSheet(
+            '#error_label{color:#FEE2E2;font-size:13px}'
+        )
+        self._error_widget_label.setWordWrap(True)
+        self._error_widget_label.setMaximumWidth(300)
+        error_layout.addWidget(self._error_widget_label)
+        self._error_widget.hide()
+        self._error_widget.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+        self._error_timer = QTimer(self)
+        self._error_timer.setSingleShot(True)
+        self._error_timer.timeout.connect(self._hide_error_widget)
 
         self._undo_shortcut = QShortcut('Ctrl+Z', self)
         self._undo_shortcut.activated.connect(self._do_undo)
@@ -235,7 +260,7 @@ class AudioDialog(QDialog):
     def _setup_layout(self) -> None:
         main = QVBoxLayout(self)
         main.setContentsMargins(12, 12, 12, 12)
-        main.setSpacing(0)
+        main.setSpacing(4)
 
         bar_h = QHBoxLayout(self._bar)
         bar_h.setContentsMargins(12, 6, 12, 6)
@@ -256,14 +281,14 @@ class AudioDialog(QDialog):
     def _on_capture_timeout(self) -> None:
         if self._mic_state != self.MIC_REC:
             return
-        self._text_edit.append('\u26a0 Recording auto-stopped: 5 minute limit.')
+        self._show_error('Recording auto-stopped: 5 minute limit.')
         self._do_stop_and_transcribe()
 
     def _do_stop_and_transcribe(self) -> None:
         try:
             self._audio_capture.save_wav(self._wav_path)
         except Exception as e:
-            self._text_edit.append(f'Error: {e}')
+            self._show_error(str(e))
             self._set_mic_state(self.MIC_IDLE)
             self._amplitude_bars.stop_animation()
             self._amplitude_bars.hide()
@@ -324,16 +349,18 @@ class AudioDialog(QDialog):
             try:
                 self._audio_capture.stop()
             except Exception as e:
-                self._text_edit.append(f'Error: {e}')
+                self._show_error(str(e))
             self._set_mic_state(self.MIC_IDLE)
             self._amplitude_bars.stop_animation()
             self._amplitude_bars.hide()
 
     def _do_start_recording(self) -> None:
+        self._error_timer.stop()
+        self._hide_error_widget()
         try:
             self._audio_capture.start()
         except Exception as e:
-            self._text_edit.append(f'Mic error: {e}')
+            self._show_error(f'Mic error: {e}')
             return
         self._set_mic_state(self.MIC_REC)
         self._amplitude_bars.show()
@@ -398,9 +425,23 @@ class AudioDialog(QDialog):
         self._set_mic_state(self.MIC_IDLE)
         self._retry_btn.show()
         if retry_after is not None and retry_after >= 0:
-            self._text_edit.append(f'\u26a0 Please wait {retry_after} seconds before re-trying.')
+            self._show_error(f'Please wait {retry_after} seconds before re-trying.')
             return
-        self._text_edit.append(f'\u26a0 Error: {error_msg}')
+        self._show_error(f'Error: {error_msg}')
+
+    def _show_error(self, message: str) -> None:
+        self._error_widget_label.setText(f'\u26a0 {message}')
+        self._error_widget.adjustSize()
+        self._error_widget.move(
+            (self.width() - self._error_widget.width()) // 2,
+            (self.height() - self._error_widget.height()) // 2
+        )
+        self._error_widget.raise_()
+        self._error_widget.show()
+        self._error_timer.start(5000)
+
+    def _hide_error_widget(self) -> None:
+        self._error_widget.hide()
 
     def _on_retry(self) -> None:
         if self._mic_state == self.MIC_SENDING:
@@ -409,6 +450,8 @@ class AudioDialog(QDialog):
         if not wav_files:
             self._retry_btn.hide()
             return
+        self._error_timer.stop()
+        self._hide_error_widget()
         self._pending_wav = wav_files[0]
         self._set_mic_state(self.MIC_SENDING)
         self._retry_btn.hide()
