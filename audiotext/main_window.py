@@ -73,6 +73,7 @@ class MainWindow(QMainWindow):
 
         text = self._dialog.current_text
         self._state_manager.save_text(text)
-        copy_to_clipboard(text)
+        if text:
+            copy_to_clipboard(text)
         self._dialog.hide()
         self._is_dialog_visible = False
