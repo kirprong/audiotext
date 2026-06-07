@@ -13,7 +13,7 @@ from PyQt6.QtCore import (
     Qt,
     QObject,
 )
-from PyQt6.QtGui import QFont, QTextOption, QShortcut
+from PyQt6.QtGui import QFont, QTextOption
 from PyQt6.QtWidgets import (
     QApplication,
     QDialog,
@@ -172,8 +172,6 @@ class AudioDialog(QDialog):
         self._queue_dir.mkdir(parents=True, exist_ok=True)
         self._retry_btn = None
         self._pending_wav = None
-        self._undo_stack: list[str] = []
-        self._undo_index = -1
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -248,9 +246,6 @@ class AudioDialog(QDialog):
         self._error_timer = QTimer(self)
         self._error_timer.setSingleShot(True)
         self._error_timer.timeout.connect(self._hide_error_widget)
-
-        self._undo_shortcut = QShortcut('Ctrl+Z', self)
-        self._undo_shortcut.activated.connect(self._do_undo)
 
         self._setup_layout()
         self._set_mic_state(self.MIC_IDLE)
@@ -370,7 +365,6 @@ class AudioDialog(QDialog):
         QApplication.instance().quit()
 
     def insert_transcription(self, text: str) -> None:
-        self._push_undo_state(self.current_text)
         cursor = self._text_edit.textCursor()
         pos = cursor.position()
         block = cursor.document().findBlock(pos)
@@ -386,28 +380,12 @@ class AudioDialog(QDialog):
 
         cursor.insertText(insert)
 
-    # -- properties --
     @property
     def current_text(self) -> str:
         return self._text_edit.toPlainText()
 
     def set_text(self, text: str) -> None:
         self._text_edit.setPlainText(text)
-
-    def _push_undo_state(self, text: str) -> None:
-        if self._undo_index < len(self._undo_stack) - 1:
-            self._undo_stack = self._undo_stack[:self._undo_index + 1]
-        self._undo_stack.append(text)
-        self._undo_index = len(self._undo_stack) - 1
-
-    def restore_undo_stack(self, stack: list[str]) -> None:
-        self._undo_stack = stack if stack else ['']
-        self._undo_index = len(self._undo_stack) - 1
-
-    def _do_undo(self) -> None:
-        if self._undo_index > 0:
-            self._undo_index -= 1
-            self._text_edit.setPlainText(self._undo_stack[self._undo_index])
 
     # -- transcription callbacks --
     def _on_transcribe_done(self, text: str) -> None:

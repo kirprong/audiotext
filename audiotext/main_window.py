@@ -63,7 +63,6 @@ class MainWindow(QMainWindow):
 
     def _show(self) -> None:
         self._dialog.set_text('')
-        self._dialog.restore_undo_stack(self._state_manager.load_undo_stack())
         self._dialog.show()
         self._dialog.raise_()
         self._dialog.activateWindow()
@@ -74,7 +73,6 @@ class MainWindow(QMainWindow):
 
         text = self._dialog.current_text
         self._state_manager.save_text(text)
-        self._state_manager.save_undo_stack(self._dialog._undo_stack)
         copy_to_clipboard(text)
         self._dialog.hide()
         self._is_dialog_visible = False
