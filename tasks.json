@@ -327,25 +327,7 @@
       "status": "done"
     },
     {
-      "id": "TASK-V1.1-004",
-      "category": "functional",
-      "priority": "high",
-      "description": "Персистентная история undo/redo в state.json с версионированием",
-      "acceptance_criteria": [
-        "state.json: добавлено поле version=1 и undo_stack (макс 100 записей)",
-        "StateManager.save_undo_stack(texts_list) сохраняет массив текстов",
-        "StateManager.load_undo_stack() восстанавливает массив текстов",
-        "При неверсионированном файле мигрирует автоматически"
-      ],
-      "test_steps": [
-        "1. Сохранить undo_stack, закрыть приложение",
-        "2. Открыть — stack должен восстановиться",
-        "3. Проверить Ctrl+Z работает для предыдущей сессии"
-      ],
-      "dependencies": [
-        "TASK-V1.1-001"
-      ],
-      "status": "done"
+      
     },
     {
       "id": "TASK-V1.1-005",
