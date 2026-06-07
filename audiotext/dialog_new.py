@@ -1,8 +1,5 @@
 from __future__ import annotations
-import math
 import os
-import time
-import shutil
 from pathlib import Path
 from typing import Callable
 
@@ -13,75 +10,19 @@ from PyQt6.QtCore import (
     Qt,
     QObject,
 )
-from PyQt6.QtGui import QFont, QTextOption, QShortcut
+from PyQt6.QtGui import QFont, QPalette, QTextOption
 from PyQt6.QtWidgets import (
-    QApplication,
     QDialog,
     QHBoxLayout,
     QVBoxLayout,
     QPushButton,
     QTextEdit,
     QFrame,
-    QWidget,
 )
 
 from .groq_whisper import GroqWhisperClient, RetryableError, NetworkError
 from .audio_capture import AudioCapture
-
-
-# ─── AmplitudeBars ─────────────────────────────────────────────────────
-class AmplitudeBars(QWidget):
-    BAR_COUNT = 10
-    BAR_WIDTH = 6
-    MIN_HEIGHT = 4
-    MAX_HEIGHT = 24
-    BAR_COLORS = ['#6366F1', '#8B5CF6', '#A855F7', '#8B5CF6', '#6366F1']
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._phase = 0.0
-        self._bars = []
-        self._anim_timer = None
-        self._setup_ui()
-
-    def _setup_ui(self) -> None:
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 4, 0, 4)
-        layout.setSpacing(2)
-        layout.setAlignment(Qt.AlignmentFlag.AlignBottom)
-        for i in range(self.BAR_COUNT):
-            bar = QFrame()
-            bar.setFixedWidth(self.BAR_WIDTH)
-            bar.setMinimumHeight(self.MIN_HEIGHT)
-            bar.setMaximumHeight(self.MAX_HEIGHT)
-            bar.setStyleSheet('QFrame{background:qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6366F1, stop:1 #A855F7);border-radius:3px;}')
-            self._bars.append(bar)
-            layout.addWidget(bar)
-        self.setFixedHeight(self.MAX_HEIGHT + 8)
-
-    def start_animation(self) -> None:
-        if self._anim_timer is None:
-            self._anim_timer = QTimer(self)
-            self._anim_timer.timeout.connect(self._animate)
-            self._anim_timer.start(50)
-
-    def stop_animation(self) -> None:
-        if self._anim_timer:
-            self._anim_timer.stop()
-            self._anim_timer.deleteLater()
-            self._anim_timer = None
-        for bar in self._bars:
-            bar.setStyleSheet('QFrame{background:qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6366F1, stop:1 #A855F7);border-radius:3px;}')
-
-    def _animate(self) -> None:
-        self._phase += 0.15
-        for i, bar in enumerate(self._bars):
-            offset = (i - (self.BAR_COUNT - 1) / 2) / (self.BAR_COUNT / 2)
-            height = self.MIN_HEIGHT + (self.MAX_HEIGHT - self.MIN_HEIGHT) * (
-                (math.sin(self._phase + offset * math.pi) + 1) / 2
-            )
-            bar.setFixedHeight(int(height))
-        self.update()
+import shutil
 
 
 # ─── Worker ──────────────────────────────────────────────────────────
@@ -116,7 +57,8 @@ class MicButton(QPushButton):
     STATE_SENDING = 'sending'
 
     IDLE_CSS = 'MicButton{background:#52525B;color:white;border-radius:22px;font-size:22px}MicButton:hover{background:#71717A}MicButton:disabled{background:#A1A1AA;color:#D4D4D8}'
-    REC_CSS = 'MicButton{background:#7F1D1D;color:#6366F1;border-radius:22px;font-size:22px}'
+    REC_CSS = 'MicButton{background:#EF4444;color:white;border-radius:22px;font-size:22px}'
+    REC_CSS2 = 'MicButton{background:#DC2626;color:white;border-radius:22px;font-size:22px}'
     SENDING_CSS = 'MicButton{background:#A1A1AA;color:#D4D4D8;border-radius:22px;font-size:14px}'
 
     def __init__(self, parent=None):
@@ -124,12 +66,14 @@ class MicButton(QPushButton):
         self.setFixedSize(44, 44)
         self.setStyleSheet(self.IDLE_CSS)
         self._state = self.STATE_IDLE
+        self._anim_timer = None
 
     @property
     def state(self) -> str:
         return self._state
 
     def set_state(self, state: str) -> None:
+        self._stop_anim()
         if state == self.STATE_IDLE:
             self.setText(MIC_EMOJI)
             self.setFixedSize(44, 44)
@@ -140,12 +84,28 @@ class MicButton(QPushButton):
             self.setFixedSize(44, 44)
             self.setDisabled(False)
             self.setStyleSheet(self.REC_CSS)
+            self._anim_timer = QTimer(self)
+            self._anim_timer.timeout.connect(self._pulse)
+            self._anim_timer.start(250)
         elif state == self.STATE_SENDING:
             self.setText('Распознаётся...')
             self.setFixedSize(140, 44)
             self.setDisabled(True)
             self.setStyleSheet(self.SENDING_CSS)
         self._state = state
+
+    def _stop_anim(self) -> None:
+        if self._anim_timer:
+            self._anim_timer.stop()
+            self._anim_timer.deleteLater()
+            self._anim_timer = None
+
+    def _pulse(self) -> None:
+        cur = self.palette().color(QPalette.ColorRole.Button)
+        if cur.red() > 220:
+            self.setStyleSheet(self.REC_CSS2)
+        else:
+            self.setStyleSheet(self.REC_CSS)
 
 
 # ─── AudioDialog ─────────────────────────────────────────────────
@@ -158,11 +118,13 @@ class AudioDialog(QDialog):
         self,
         api_key: str,
         toggle_callback: Callable[[], None],
+        cut_callback: Callable[[str], None],
     ):
         super().__init__()
         self._api_key = api_key
         self._groq_client = GroqWhisperClient(api_key)
         self._toggle_callback = toggle_callback
+        self._cut_callback = cut_callback
         self._mic_state = None
         self._audio_capture = AudioCapture()
         self._transcribe_thread = None
@@ -170,9 +132,6 @@ class AudioDialog(QDialog):
         self._queue_dir = Path(os.getenv('APPDATA', '/tmp')) / 'AudioText' / 'queue'
         self._queue_dir.mkdir(parents=True, exist_ok=True)
         self._retry_btn = None
-        self._pending_wav = None
-        self._undo_stack: list[str] = []
-        self._undo_index = -1
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -197,9 +156,6 @@ class AudioDialog(QDialog):
         self._mic_btn = MicButton()
         self._mic_btn.clicked.connect(self.on_mic_toggle)
 
-        self._amplitude_bars = AmplitudeBars()
-        self._amplitude_bars.hide()
-
         self._retry_btn = QPushButton('Retry')
         self._retry_btn.setFixedSize(72, 30)
         self._retry_btn.clicked.connect(self._on_retry)
@@ -209,12 +165,12 @@ class AudioDialog(QDialog):
         )
         self._retry_btn.hide()
 
-        self._close_btn = QPushButton('✕')
-        self._close_btn.setFixedSize(20, 20)
-        self._close_btn.clicked.connect(self._on_close)
-        self._close_btn.setStyleSheet(
-            'QPushButton{background:#18181B;color:#9CA3AF;border:none;border-radius:4px}'
-            'QPushButton:hover{background:#27272A;color:#E4E4E7}'
+        self.copy_btn = QPushButton('Cut')
+        self.copy_btn.setFixedSize(72, 30)
+        self.copy_btn.clicked.connect(self.on_cut)
+        self.copy_btn.setStyleSheet(
+            'QPushButton{background:#27272A;color:#E4E4E7;border:1px solid #3F3F46;border-radius:6px;padding:0 8px}'
+            'QPushButton:hover{background:#3F3F46}'
         )
 
         self._text_edit = QTextEdit()
@@ -223,9 +179,6 @@ class AudioDialog(QDialog):
         self._text_edit.setStyleSheet(
             'QTextEdit{background:#09090B;color:#FAFAFA;border:1px solid #3F3F46;border-top:none;border-radius:0 0 8px 8px;padding:8px}'
         )
-
-        self._undo_shortcut = QShortcut('Ctrl+Z', self)
-        self._undo_shortcut.activated.connect(self._do_undo)
 
         self._setup_layout()
         self._set_mic_state(self.MIC_IDLE)
@@ -241,10 +194,9 @@ class AudioDialog(QDialog):
         bar_h.setContentsMargins(12, 6, 12, 6)
         bar_h.setSpacing(8)
         bar_h.addWidget(self._mic_btn)
-        bar_h.addWidget(self._amplitude_bars)
         bar_h.addWidget(self._retry_btn)
         bar_h.addStretch()
-        bar_h.addWidget(self._close_btn)
+        bar_h.addWidget(self.copy_btn)
 
         main.addWidget(self._bar)
         main.addWidget(self._text_edit, 1)
@@ -265,12 +217,8 @@ class AudioDialog(QDialog):
         except Exception as e:
             self._text_edit.append(f'Error: {e}')
             self._set_mic_state(self.MIC_IDLE)
-            self._amplitude_bars.stop_animation()
-            self._amplitude_bars.hide()
             return
 
-        self._amplitude_bars.stop_animation()
-        self._amplitude_bars.hide()
         self._set_mic_state(self.MIC_SENDING)
         self._start_transcribe_thread()
 
@@ -306,28 +254,45 @@ class AudioDialog(QDialog):
             pass
 
     def start_recording(self) -> None:
+        """
+        Public API for global hotkeys:
+        start recording only if currently idle.
+        """
         if self._mic_state == self.MIC_IDLE:
             self._do_start_recording()
 
     def stop_recording(self) -> None:
+        """
+        Public API for global hotkeys:
+        stop recording only if currently recording (REC).
+        """
         if self._mic_state == self.MIC_REC:
             self._do_stop_and_transcribe()
 
     def toggle_recording(self) -> None:
+        """
+        Public API for global hotkeys:
+        - if idle -> start recording
+        - if recording -> stop and transcribe
+        - if sending -> ignore
+        """
         if self._mic_state == self.MIC_IDLE:
             self._do_start_recording()
         elif self._mic_state == self.MIC_REC:
             self._do_stop_and_transcribe()
 
     def stop_recording_without_transcribe(self) -> None:
+        """
+        Stop recording but DO NOT send audio for transcription.
+        Used when hiding the UI via Alt+`.
+        """
         if self._mic_state == self.MIC_REC:
             try:
+                # Stop audio capture and discard buffered audio.
                 self._audio_capture.stop()
             except Exception as e:
                 self._text_edit.append(f'Error: {e}')
             self._set_mic_state(self.MIC_IDLE)
-            self._amplitude_bars.stop_animation()
-            self._amplitude_bars.hide()
 
     def _do_start_recording(self) -> None:
         try:
@@ -336,14 +301,12 @@ class AudioDialog(QDialog):
             self._text_edit.append(f'Mic error: {e}')
             return
         self._set_mic_state(self.MIC_REC)
-        self._amplitude_bars.show()
-        self._amplitude_bars.start_animation()
 
-    def _on_close(self) -> None:
-        QApplication.instance().quit()
+    def on_cut(self) -> None:
+        self._cut_callback(self.current_text)
+        self._text_edit.clear()
 
     def insert_transcription(self, text: str) -> None:
-        self._push_undo_state(self.current_text)
         cursor = self._text_edit.textCursor()
         pos = cursor.position()
         block = cursor.document().findBlock(pos)
@@ -355,78 +318,3 @@ class AudioDialog(QDialog):
         if before and not before[-1].isspace():
             insert = ' ' + insert
         if after and not after[0].isspace():
-            insert = insert + ' '
-
-        cursor.insertText(insert)
-
-    # -- properties --
-    @property
-    def current_text(self) -> str:
-        return self._text_edit.toPlainText()
-
-    def set_text(self, text: str) -> None:
-        self._text_edit.setPlainText(text)
-
-    def _push_undo_state(self, text: str) -> None:
-        if self._undo_index < len(self._undo_stack) - 1:
-            self._undo_stack = self._undo_stack[:self._undo_index + 1]
-        self._undo_stack.append(text)
-        self._undo_index = len(self._undo_stack) - 1
-
-    def restore_undo_stack(self, stack: list[str]) -> None:
-        self._undo_stack = stack if stack else ['']
-        self._undo_index = len(self._undo_stack) - 1
-
-    def _do_undo(self) -> None:
-        if self._undo_index > 0:
-            self._undo_index -= 1
-            self._text_edit.setPlainText(self._undo_stack[self._undo_index])
-
-    # -- transcription callbacks --
-    def _on_transcribe_done(self, text: str) -> None:
-        wav_to_delete = self._pending_wav or self._wav_path
-        if wav_to_delete.exists():
-            wav_to_delete.unlink()
-        self.insert_transcription(text)
-        self._set_mic_state(self.MIC_IDLE)
-        self._pending_wav = None
-
-    def _on_transcribe_error(self, error_msg: str, retry_after: int = -1) -> None:
-        wav_to_queue = self._wav_path
-        if wav_to_queue.exists():
-            shutil.copy2(wav_to_queue, self._queue_dir / f'queue_{int(time.time())}.wav')
-        self._set_mic_state(self.MIC_IDLE)
-        self._retry_btn.show()
-        if retry_after is not None and retry_after >= 0:
-            self._text_edit.append(f'\u26a0 Please wait {retry_after} seconds before re-trying.')
-            return
-        self._text_edit.append(f'\u26a0 Error: {error_msg}')
-
-    def _on_retry(self) -> None:
-        if self._mic_state == self.MIC_SENDING:
-            return
-        wav_files = sorted(self._queue_dir.glob('queue_*.wav'), reverse=True)
-        if not wav_files:
-            self._retry_btn.hide()
-            return
-        self._pending_wav = wav_files[0]
-        self._set_mic_state(self.MIC_SENDING)
-        self._retry_btn.hide()
-        self._transcribe_thread = TranscribeThread(self._groq_client, self._pending_wav)
-        self._transcribe_thread.finished.connect(self._on_transcribe_done)
-        self._transcribe_thread.error.connect(self._on_transcribe_error)
-        self._transcribe_thread.start()
-
-    def _bar_mouse_press(self, event) -> None:
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
-            event.accept()
-
-    def _bar_mouse_move(self, event) -> None:
-        if self._drag_pos is not None and event.buttons() & Qt.MouseButton.LeftButton:
-            self.move(event.globalPosition().toPoint() - self._drag_pos)
-            event.accept()
-
-    def _bar_mouse_release(self, event) -> None:
-        self._drag_pos = None
-        event.accept()

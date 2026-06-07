@@ -9,7 +9,6 @@ from .dialog import AudioDialog
 from .state import StateManager
 
 
-
 class MainWindow(QMainWindow):
     def __init__(self, api_key: str):
         super().__init__()
@@ -19,24 +18,15 @@ class MainWindow(QMainWindow):
         self._dialog = AudioDialog(
             api_key=api_key,
             toggle_callback=self.on_toggle,
-            cut_callback=self._on_cut,
         )
 
     def _run_in_gui_thread(self, fn: Callable[[], None]) -> None:
-        """
-        Ensure GUI operations run in the Qt main thread.
-        Called from hotkey listener thread (pynput).
-        """
         app = QApplication.instance()
         if app is None:
-            # Fallback (shouldn't happen in normal app runtime)
             fn()
             return
-
-        # Schedule for next Qt event loop iteration.
         QTimer.singleShot(0, fn)
 
-    # GUI-safe wrappers for hotkeys (pynput runs in a non-Qt thread).
     def on_toggle_from_hotkey(self) -> None:
         self._run_in_gui_thread(self.on_toggle)
 
@@ -52,7 +42,6 @@ class MainWindow(QMainWindow):
     def on_toggle(self) -> None:
         if not self._is_dialog_visible:
             self._show()
-            # When showing via Alt+`, start recording automatically.
             self._dialog.start_recording()
         else:
             self._hide()
@@ -61,18 +50,11 @@ class MainWindow(QMainWindow):
         if not self._is_dialog_visible:
             self._show()
 
-
     def on_hide(self) -> None:
         if self._is_dialog_visible:
             self._hide()
 
-
     def on_one(self) -> None:
-        """
-        Alt+1 logic:
-        - if dialog is visible -> toggle recording
-        - if dialog is hidden -> do nothing
-        """
         if self._is_dialog_visible:
             self._dialog.toggle_recording()
 
@@ -81,22 +63,18 @@ class MainWindow(QMainWindow):
 
     def _show(self) -> None:
         self._dialog.set_text('')
+        self._dialog.restore_undo_stack(self._state_manager.load_undo_stack())
         self._dialog.show()
         self._dialog.raise_()
         self._dialog.activateWindow()
         self._is_dialog_visible = True
 
     def _hide(self) -> None:
-        # Alt+` hides the UI and must stop recording WITHOUT sending to server.
         self._dialog.stop_recording_without_transcribe()
 
         text = self._dialog.current_text
         self._state_manager.save_text(text)
+        self._state_manager.save_undo_stack(self._dialog._undo_stack)
         copy_to_clipboard(text)
         self._dialog.hide()
         self._is_dialog_visible = False
-
-
-
-    def _on_cut(self, text: str) -> None:
-        copy_to_clipboard(text)

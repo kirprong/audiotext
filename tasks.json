@@ -55,7 +55,9 @@
         "4. Написать повреждённый JSON в файл, вызвать load_text() — вернуть '' без исключения",
         "5. Удалить state_dir, вызвать save_text('x') — директория создана, файл записан"
       ],
-      "dependencies": ["TASK-001"],
+      "dependencies": [
+        "TASK-001"
+      ],
       "status": "done"
     },
     {
@@ -69,7 +71,9 @@
       "test_steps": [
         "1. Вызвать copy_to_clipboard('hello') — проверить что pyperclip.paste() == 'hello'"
       ],
-      "dependencies": ["TASK-001"],
+      "dependencies": [
+        "TASK-001"
+      ],
       "status": "done"
     },
     {
@@ -91,7 +95,9 @@
         "3. Создать тестовый WAV файл (16kHz, mono, int16), вызвать transcribe — проверить что WAV удалён после вызова",
         "4. Проверить что при 429 бросается RetryableError с сообщением содержащим Retry-After"
       ],
-      "dependencies": ["TASK-001"],
+      "dependencies": [
+        "TASK-001"
+      ],
       "status": "done"
     },
     {
@@ -111,7 +117,9 @@
         "2. Вызвать start(), записать сэмпл, save_wav(temp_path) — проверить что WAV существует и валиден (wave.open читает 16kHz, 1 channel)",
         "3. Проверить что WAV файл не превышает ~10MB для 5 минут"
       ],
-      "dependencies": ["TASK-001"],
+      "dependencies": [
+        "TASK-001"
+      ],
       "status": "done"
     },
     {
@@ -137,7 +145,11 @@
         "4. Вызвать insert_transcription('hello') на пустое поле — проверить что результат не имеет лишних пробелов",
         "5. Ввести 'hello|world' (где | — курсор), вызвать insert_transcription('x') — получить 'hello x world'"
       ],
-      "dependencies": ["TASK-001", "TASK-004", "TASK-005"],
+      "dependencies": [
+        "TASK-001",
+        "TASK-004",
+        "TASK-005"
+      ],
       "status": "done"
     },
     {
@@ -156,7 +168,11 @@
         "3. Вызвать on_toggle() снова — проверить что диалог скрыт и state.json записан",
         "4. Восстановить текст из state.json проверить, что он загружен в диалог при повторном on_toggle()"
       ],
-      "dependencies": ["TASK-002", "TASK-003", "TASK-006"],
+      "dependencies": [
+        "TASK-002",
+        "TASK-003",
+        "TASK-006"
+      ],
       "status": "done"
     },
     {
@@ -179,7 +195,11 @@
         "3. Проверить что WAV файл удалён после отправки (существует ли %TEMP%/audiotext.wav после транскрипции)",
         "4. Проверить формат ошибки: '⚠ Error: {message}' в QTextEdit"
       ],
-      "dependencies": ["TASK-004", "TASK-005", "TASK-006"],
+      "dependencies": [
+        "TASK-004",
+        "TASK-005",
+        "TASK-006"
+      ],
       "status": "done"
     },
     {
@@ -197,7 +217,9 @@
         "2. Нажать Alt+` — проверить что диалог появился",
         "3. Нажать Alt+` — проверить что диалог скрыт"
       ],
-      "dependencies": ["TASK-007"],
+      "dependencies": [
+        "TASK-007"
+      ],
       "status": "done"
     },
     {
@@ -216,7 +238,10 @@
         "2. С .env с невалидным ключом — проверить ошибку 401 и выход",
         "3. С .env с валидным ключом — проверить что приложение стартовало и хоткей Alt+` работает"
       ],
-      "dependencies": ["TASK-004", "TASK-009"],
+      "dependencies": [
+        "TASK-004",
+        "TASK-009"
+      ],
       "status": "done"
     },
     {
@@ -233,7 +258,10 @@
         "1. Проверить что .env в .gitignore",
         "2. python app.pyw запускает приложение без ошибок импорта"
       ],
-      "dependencies": ["TASK-001", "TASK-010"],
+      "dependencies": [
+        "TASK-001",
+        "TASK-010"
+      ],
       "status": "done"
     },
     {
@@ -251,8 +279,10 @@
         "2. Выполнить запись, проверить транскрипцию",
         "3. Скрыть окно, открыть снова — текст должен восстановиться"
       ],
-      "dependencies": ["TASK-011"],
-      "status": "pending"
+      "dependencies": [
+        "TASK-011"
+      ],
+      "status": "done"
     },
     {
       "id": "TASK-V1.1-002",
@@ -270,8 +300,10 @@
         "2. При REC бары плавно меняют высоту",
         "3. При SENDING бары останавливаются"
       ],
-      "dependencies": ["TASK-V1.1-001"],
-      "status": "pending"
+      "dependencies": [
+        "TASK-V1.1-001"
+      ],
+      "status": "done"
     },
     {
       "id": "TASK-V1.1-003",
@@ -289,8 +321,10 @@
         "2. Нажать Retry — файл отправлен повторно",
         "3. Отправка успешна — WAV удаляется из очереди"
       ],
-      "dependencies": ["TASK-V1.1-001"],
-      "status": "pending"
+      "dependencies": [
+        "TASK-V1.1-001"
+      ],
+      "status": "done"
     },
     {
       "id": "TASK-V1.1-004",
@@ -308,8 +342,10 @@
         "2. Открыть — stack должен восстановиться",
         "3. Проверить Ctrl+Z работает для предыдущей сессии"
       ],
-      "dependencies": ["TASK-V1.1-001"],
-      "status": "pending"
+      "dependencies": [
+        "TASK-V1.1-001"
+      ],
+      "status": "done"
     },
     {
       "id": "TASK-V1.1-005",
@@ -325,8 +361,10 @@
         "1. Вызвать transcribe с невалидным WAV — файл удалён",
         "2. Имитировать NetworkError (например, отключить интернет) — WAV сохраняется"
       ],
-      "dependencies": ["TASK-V1.1-001"],
-      "status": "pending"
+      "dependencies": [
+        "TASK-V1.1-001"
+      ],
+      "status": "done"
     },
     {
       "id": "TASK-V1.1-006",
@@ -344,8 +382,13 @@
         "2. При REC бары плавно меняют высоту",
         "3. При NetworkError появляется кнопка Retry"
       ],
-      "dependencies": ["TASK-V1.1-002", "TASK-V1.1-003", "TASK-V1.1-004", "TASK-V1.1-005"],
-      "status": "pending"
+      "dependencies": [
+        "TASK-V1.1-002",
+        "TASK-V1.1-003",
+        "TASK-V1.1-004",
+        "TASK-V1.1-005"
+      ],
+      "status": "done"
     }
   ]
 }
