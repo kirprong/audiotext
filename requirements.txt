@@ -1,0 +1,7 @@
+PyQt6
+sounddevice
+requests
+pyperclip
+python-dotenv
+pynput
+numpy

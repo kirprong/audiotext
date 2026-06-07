@@ -1,0 +1,351 @@
+{
+  "agent_instructions": {
+    "before_start": [
+      "Прочитай PRD-AudioText-2026-06-05.md, TECH_SPEC-AudioText-2026-06-05.md, tasks.json и git log --oneline -20",
+      "Выбери ОДНУ задачу со статусом 'pending' и наивысшим приоритетом",
+      "Убедись, что все ID задач из массива dependencies имеют статус 'done'"
+    ],
+    "during_work": [
+      "Работай ТОЛЬКО над выбранной задачей. Строго соблюдай контракты из TECH_SPEC",
+      "Делай микро-коммиты после каждого логического шага",
+      "Веди логирование своих действий в progress.md"
+    ],
+    "before_finish": [
+      "Выполни ВСЕ test_steps, указанные в задаче",
+      "Если тесты пройдены успешно, измени status задачи на 'done' в tasks.json",
+      "Строго ЗАПРЕЩАЕТСЯ удалять или переписывать чужие задачи"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "TASK-001",
+      "category": "infrastructure",
+      "priority": "critical",
+      "description": "Инициализация проекта: creation venv, requirements.txt, .gitignore, .env шаблон",
+      "acceptance_criteria": [
+        "Создан virtual environment с Python 3.9+",
+        "requirements.txt содержит: PyQt6, sounddevice, requests, pyperclip, python-dotenv, pynput",
+        "Установлены все зависимости без ошибок",
+        "Создан .gitignore с записью .env, __pycache__, *.pyc, .venv",
+        "Создан .env с пустым GROQ_API_KEY= для разработки"
+      ],
+      "test_steps": [
+        "1. Активировать venv и выполнить pip install -r requirements.txt",
+        "2. Убедиться, что все пакеты импортируемы: python -c \"import PyQt6; import sounddevice; import requests; import pyperclip; import dotenv; import pynput\"",
+        "3. Проверить, что .gitignore содержит .env"
+      ],
+      "dependencies": [],
+      "status": "done"
+    },
+    {
+      "id": "TASK-002",
+      "category": "functional",
+      "priority": "critical",
+      "description": "Реализация StateManager: save_text и load_text с атомарной записью в %APPDATA%/AudioText/state.json",
+      "acceptance_criteria": [
+        "StateManager инициализируется с self.state_dir = Path(os.getenv('APPDATA')) / 'AudioText' и self.state_file = self.state_dir / 'state.json'",
+        "load_text() читает state.json, возвращает dict['text'] или пустую строку при отсутствующем файле или json.JSONDecodeError",
+        "save_text(text) пишите {'text': text} атомарно через temp file + os.replace()",
+        "save_text создаёт state_dir если он отсутствует"
+      ],
+      "test_steps": [
+        "1. Создать StateManager, вызвать load_text() — вернуть '' при отсутствии файла",
+        "2. Вызвать save_text('test') — проверить что файл создан с {'text': 'test'}",
+        "3. Вызвать load_text() — вернуть 'test'",
+        "4. Написать повреждённый JSON в файл, вызвать load_text() — вернуть '' без исключения",
+        "5. Удалить state_dir, вызвать save_text('x') — директория создана, файл записан"
+      ],
+      "dependencies": ["TASK-001"],
+      "status": "done"
+    },
+    {
+      "id": "TASK-003",
+      "category": "functional",
+      "priority": "critical",
+      "description": "Реализация clipboard_util.py: copy_to_clipboard с pyperclip",
+      "acceptance_criteria": [
+        "Функция copy_to_clipboard(text) копирует text в системный буфер обмена через pyperclip"
+      ],
+      "test_steps": [
+        "1. Вызвать copy_to_clipboard('hello') — проверить что pyperclip.paste() == 'hello'"
+      ],
+      "dependencies": ["TASK-001"],
+      "status": "done"
+    },
+    {
+      "id": "TASK-004",
+      "category": "integration",
+      "priority": "critical",
+      "description": "Реализация GroqWhisperClient: validate_api_key и transcribe с контрактами из Tech Spec",
+      "acceptance_criteria": [
+        "GroqWhisperClient.__init__(self, api_key: str) сохраняет api_key",
+        "validate_api_key() GET к /openai/v1/models с timeout=5, возвращает True при 200, raise ValueError при 401",
+        "transcribe(wav_path: Path) POST multipart/form-data к https://api.groq.com/openai/v1/audio/transcriptions с model=whisper-large-v3-turbo, timeout=30",
+        "transcribe удаляет wav_path в finally блоке после POST (при успехе И при ошибке)",
+        "transcribe возвращает response JSON['text']",
+        "transcribe raise ValueError при 400/401/413, RetryableError при 429/5xx, NetworkError при ошибках сети"
+      ],
+      "test_steps": [
+        "1. Создать клиента с пустым ключом, вызвать validate_api_key() — получить ValueError",
+        "2. С валидным ключом: validate_api_key() — вернуть True",
+        "3. Создать тестовый WAV файл (16kHz, mono, int16), вызвать transcribe — проверить что WAV удалён после вызова",
+        "4. Проверить что при 429 бросается RetryableError с сообщением содержащим Retry-After"
+      ],
+      "dependencies": ["TASK-001"],
+      "status": "done"
+    },
+    {
+      "id": "TASK-005",
+      "category": "functional",
+      "priority": "critical",
+      "description": "Реализация AudioCapture: start, stop, save_wav с sounddevice и stdlib wave (16kHz, mono, int16)",
+      "acceptance_criteria": [
+        "AudioCapture константы: SAMPLE_RATE=16000, CHANNELS=1, DTYPE='int16', TIMEOUT_SECONDS=300",
+        "start() запускает sounddevice callback для буферизации int16 сэмплов, устанавливает QTimer.singleShot(300*1000, self._on_timeout)",
+        "stop() останавливает callback, возвращает bytearray int16-PCM",
+        "save_wav(filepath: Path) останавливает захват, записывает буфер в WAV через stdlib wave (16kHz, mono, int16)",
+        "_on_timeout() авто-стоп записи по таймауту 5 минут"
+      ],
+      "test_steps": [
+        "1. Создать AudioCapture, вызвать start(), подождать 100ms, вызвать stop() — получить непустой bytearray",
+        "2. Вызвать start(), записать сэмпл, save_wav(temp_path) — проверить что WAV существует и валиден (wave.open читает 16kHz, 1 channel)",
+        "3. Проверить что WAV файл не превышает ~10MB для 5 минут"
+      ],
+      "dependencies": ["TASK-001"],
+      "status": "done"
+    },
+    {
+      "id": "TASK-006",
+      "category": "ui",
+      "priority": "critical",
+      "description": "Реализация dialog.py: AudioDialog с QTextEdit, кнопкой микрофона (3 состояния), кнопкой Cut, без рамки, поверх всех окон",
+      "acceptance_criteria": [
+        "AudioDialog(QDialog) с framelessWindowHint и WindowStaysOnTopHint",
+        "Layout: верхняя панель с Mic кнопкой слева и Cut кнопкой справа, QTextEdit занимает всё остальное пространство (stretch)",
+        "Mic стйт: MIC_IDLE (gray-600, 🎤), MIC_REC (red-500, пульсация), MIC_SENDING (gray-400, disabled, 'Распознаётся...')",
+        "QTextEdit: font 14px, word wrap включен",
+        "insert_transcription(text): вставка текста с умными пробелами (до: если предшествующий char не whitespace — добавить ' '; после: если следующий char не whitespace — добавить ' ')",
+        "current_text property возвращает текст из QTextEdit",
+        "on_mic_toggle: IDLE → start recording, REC → stop + send, SENDING → no-op",
+        "on_cut: вызвать copy_callback с текстом",
+        "during SENDING: Mic кнопка disabled, текст 'Распознаётся...', используется QThread и signal для обновления UI"
+      ],
+      "test_steps": [
+        "1. Создать QApplication и AudioDialog — проверить что окно отображается без рамки, поверх всех окон",
+        "2. Нажать Mic кнопку — проверить переход в состояние MIC_REC (красный цвет)",
+        "3. Нажать Mic кнопку снова — проверить что кнопка переходит в MIC_SENDING, текст 'Распознаётся...'",
+        "4. Вызвать insert_transcription('hello') на пустое поле — проверить что результат не имеет лишних пробелов",
+        "5. Ввести 'hello|world' (где | — курсор), вызвать insert_transcription('x') — получить 'hello x world'"
+      ],
+      "dependencies": ["TASK-001", "TASK-004", "TASK-005"],
+      "status": "done"
+    },
+    {
+      "id": "TASK-007",
+      "category": "ui",
+      "priority": "critical",
+      "description": "Реализация main_window.py: MainWindow с pynput Alt+` для показа/скрытия диалога",
+      "acceptance_criteria": [
+        "MainWindow(QMainWindow) принимает api_key в __init__",
+        "on_toggle(): если dialog скрыт → показать + загрузить текст из StateManager.load_text(); если dialog виден → сохранить текст в StateManager.save_text + копировать в буфер через clipboard_util.copy_to_clipboard + скрыть",
+        "is_dialog_visible() возвращает bool видимости диалога"
+      ],
+      "test_steps": [
+        "1. Создать MainWindow — проверить что он создан и диалог скрыт",
+        "2. Вызвать on_toggle() — проверить что диалог показан",
+        "3. Вызвать on_toggle() снова — проверить что диалог скрыт и state.json записан",
+        "4. Восстановить текст из state.json проверить, что он загружен в диалог при повторном on_toggle()"
+      ],
+      "dependencies": ["TASK-002", "TASK-003", "TASK-006"],
+      "status": "done"
+    },
+    {
+      "id": "TASK-008",
+      "category": "ui",
+      "priority": "high",
+      "description": "Интеграция аудио и Groq в AudioDialog: on_mic_toggle вызывает AudioCapture и GroqWhisperClient с корректной обработкой ошибок",
+      "acceptance_criteria": [
+        "on_mic_toggle в IDLE → AudioCapture.start() + переход в MIC_REC",
+        "on_mic_toggle в MIC_REC → AudioCapture.stop() → save_wav → QThread запуск groq_client.transcribe() → переход в MIC_SENDING",
+        "При успешной транскрипции: insert_transcription(text) → возврат в MIC_IDLE",
+        "При ValueError/RetryableError/NetworkError: показать '⚠ Error: {error_message}' в QTextEdit, возврат в MIC_IDLE",
+        "При rate limit 429: прочитать Retry-After, показать '⚠ Подождите N секунд перед повторной отправкой.'",
+        "WAV файл всегда удаляется (в finally transcribe или в обработчике ошибки)",
+        "При _on_timeout (5 мин): показать '⚠ Запись автоматически остановлена: лимит 5 минут.' в QTextEdit, сохранить и отправить"
+      ],
+      "test_steps": [
+        "1. Simulate IDLE → Mic → MIC_REC → Mic → MIC_SENDING → wait → MIC_IDLE, текст вставлен",
+        "2. Вызвать transcribe с невалидным WAV — проверить что ошибка отобразилась и кнопка в MIC_IDLE",
+        "3. Проверить что WAV файл удалён после отправки (существует ли %TEMP%/audiotext.wav после транскрипции)",
+        "4. Проверить формат ошибки: '⚠ Error: {message}' в QTextEdit"
+      ],
+      "dependencies": ["TASK-004", "TASK-005", "TASK-006"],
+      "status": "done"
+    },
+    {
+      "id": "TASK-009",
+      "category": "ui",
+      "priority": "high",
+      "description": "Реализация GlobalHotkey: Alt+` привязка к MainWindow.on_toggle. Используется pynput вместо недоступного PyQxtGlobalShortcut",
+      "acceptance_criteria": [
+        "GlobalHotkey с отслеживанием Alt + ` через pynput",
+        "При нажатии Alt+` вызывается MainWindow.on_toggle",
+        "Hotkey зарегистрирован при старте приложения"
+      ],
+      "test_steps": [
+        "1. Создать QApplication, MainWindow, GlobalHotkey — проверить регистрацию хоткея",
+        "2. Нажать Alt+` — проверить что диалог появился",
+        "3. Нажать Alt+` — проверить что диалог скрыт"
+      ],
+      "dependencies": ["TASK-007"],
+      "status": "done"
+    },
+    {
+      "id": "TASK-010",
+      "category": "functional",
+      "priority": "critical",
+      "description": "Реализация app.pyw: main() с чтением .env, валидацией API ключа, созданием QApplication и запуском",
+      "acceptance_criteria": [
+        "main() читает .env через python-dotenv, извлекает GROQ_API_KEY",
+        "main() валидирует ключ через GroqWhisperClient.validate_api_key(): при 401 → показать error dialog, exit",
+        "main() создаёт QApplication, MainWindow, GlobalHotkey, exec",
+        "При отсутствии .env или пустом GROQ_API_KEY → показать ошибку на старте, не запускать главное окно"
+      ],
+      "test_steps": [
+        "1. Без .env запустить app.pyw — проверить что показана ошибка и приложение вышло",
+        "2. С .env с невалидным ключом — проверить ошибку 401 и выход",
+        "3. С .env с валидным ключом — проверить что приложение стартовало и хоткей Alt+` работает"
+      ],
+      "dependencies": ["TASK-004", "TASK-009"],
+      "status": "done"
+    },
+    {
+      "id": "TASK-011",
+      "category": "infrastructure",
+      "priority": "medium",
+      "description": "Добавление .env в .gitignore и завершение сетапа проекта",
+      "acceptance_criteria": [
+        ".env записан в .gitignore",
+        "requirements.txt содержит все нужные зависимости",
+        "Проект запускается командой python app.pyw"
+      ],
+      "test_steps": [
+        "1. Проверить что .env в .gitignore",
+        "2. python app.pyw запускает приложение без ошибок импорта"
+      ],
+      "dependencies": ["TASK-001", "TASK-010"],
+      "status": "done"
+    },
+    {
+      "id": "TASK-V1.1-001",
+      "category": "testing",
+      "priority": "critical",
+      "description": "Регрессионное тестирование Stage 0-1 перед началом Stage 2",
+      "acceptance_criteria": [
+        "Проект успешно запускается и Alt+` работает",
+        "Запись и транскрипция работает корректно",
+        "Текст сохраняется и восстанавливается из state.json"
+      ],
+      "test_steps": [
+        "1. Запустить приложение, проверить регистрацию хоткея",
+        "2. Выполнить запись, проверить транскрипцию",
+        "3. Скрыть окно, открыть снова — текст должен восстановиться"
+      ],
+      "dependencies": ["TASK-011"],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-V1.1-002",
+      "category": "ui",
+      "priority": "high",
+      "description": "Реализация AmplitudeBars: 5 вертикальных столбиков с анимацией во время записи",
+      "acceptance_criteria": [
+        "Создан класс AmplitudeBars(QWidget) с 5 QFrame столбиками",
+        "Цвета баров: #6366F1, #8B5CF6, #A855F7 (градиент)",
+        "Анимация включается при MIC_REC, останавливается при MIC_IDLE",
+        "Бары добавлены в layout между микрофоном и кнопкой Cut"
+      ],
+      "test_steps": [
+        "1. При IDLE бары не анимируются",
+        "2. При REC бары плавно меняют высоту",
+        "3. При SENDING бары останавливаются"
+      ],
+      "dependencies": ["TASK-V1.1-001"],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-V1.1-003",
+      "category": "functional",
+      "priority": "high",
+      "description": "Реализация QueueManager: сохранение WAV при NetworkError, кнопка Retry",
+      "acceptance_criteria": [
+        "QueueManager сохраняет WAV в %APPDATA%/AudioText/queue/ при NetworkError",
+        "При NetworkError показывается кнопка 'Retry' в текстовом поле",
+        "Retry отправляет сохранённый WAV повторно",
+        "Кнопка Retry неактивна во время отправки"
+      ],
+      "test_steps": [
+        "1. Вызвать transcribe с выключенным интернетом — WAV должен появиться в queue/",
+        "2. Нажать Retry — файл отправлен повторно",
+        "3. Отправка успешна — WAV удаляется из очереди"
+      ],
+      "dependencies": ["TASK-V1.1-001"],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-V1.1-004",
+      "category": "functional",
+      "priority": "high",
+      "description": "Персистентная история undo/redo в state.json с версионированием",
+      "acceptance_criteria": [
+        "state.json: добавлено поле version=1 и undo_stack (макс 100 записей)",
+        "StateManager.save_undo_stack(texts_list) сохраняет массив текстов",
+        "StateManager.load_undo_stack() восстанавливает массив текстов",
+        "При неверсионированном файле мигрирует автоматически"
+      ],
+      "test_steps": [
+        "1. Сохранить undo_stack, закрыть приложение",
+        "2. Открыть — stack должен восстановиться",
+        "3. Проверить Ctrl+Z работает для предыдущей сессии"
+      ],
+      "dependencies": ["TASK-V1.1-001"],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-V1.1-005",
+      "category": "functional",
+      "priority": "high",
+      "description": "Обновление groq_whisper.py: НЕ удалять WAV при NetworkError",
+      "acceptance_criteria": [
+        "transcribe НЕ удаляет wav_path при NetworkError",
+        "WAV удаляется только при успешном ответе или ValueError/RetryableError",
+        "Гарантированный констракт: удаление перенесено в вызывающий код"
+      ],
+      "test_steps": [
+        "1. Вызвать transcribe с невалидным WAV — файл удалён",
+        "2. Имитировать NetworkError (например, отключить интернет) — WAV сохраняется"
+      ],
+      "dependencies": ["TASK-V1.1-001"],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-V1.1-006",
+      "category": "ui",
+      "priority": "medium",
+      "description": "Интеграция AmplitudeBars и Queue/Retry в AudioDialog",
+      "acceptance_criteria": [
+        "AmplitudeBars добавлены в layout между микрофоном и Cut",
+        "AmplitudeBars анимируются при MIC_REC",
+        "Retry кнопка появляется при NetworkError",
+        "undo/redo работает между сессиями"
+      ],
+      "test_steps": [
+        "1. При IDLE бары не анимируются",
+        "2. При REC бары плавно меняют высоту",
+        "3. При NetworkError появляется кнопка Retry"
+      ],
+      "dependencies": ["TASK-V1.1-002", "TASK-V1.1-003", "TASK-V1.1-004", "TASK-V1.1-005"],
+      "status": "pending"
+    }
+  ]
+}
