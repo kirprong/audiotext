@@ -68,12 +68,16 @@ class GlobalHotkey:
                 vk = self._vk(key)
                 if vk == 49:        # 1
                     self._signals.one_triggered.emit()
+                    return True
                 elif vk == 192:     # `
                     self._signals.triggered.emit()
+                    return True
                 elif vk == 67:      # C
                     self._signals.hide_triggered.emit()
+                    return True
                 elif vk == 65:      # A
                     self._signals.show_triggered.emit()
+                    return True
 
         def on_release(key):
             if key in (keyboard.Key.alt_l, keyboard.Key.alt_r):
