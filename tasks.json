@@ -357,7 +357,6 @@
         "AmplitudeBars добавлены в layout между микрофоном и Cut",
         "AmplitudeBars анимируются при MIC_REC",
         "Retry кнопка появляется при NetworkError",
-        "undo/redo работает между сессиями"
       ],
       "test_steps": [
         "1. При IDLE бары не анимируются",
