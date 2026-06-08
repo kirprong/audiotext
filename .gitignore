@@ -1,6 +1,6 @@
+*.md
 api.env
 .env
 __pycache__/
 *.pyc
 .venv/
-.md
