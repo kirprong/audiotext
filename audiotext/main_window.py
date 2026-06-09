@@ -3,14 +3,12 @@ from typing import Callable
 
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication, QMainWindow
-from pynput.keyboard import Key, Controller
 
 from .clipboard_util import copy_to_clipboard
 from .dialog import AudioDialog
 from .state import StateManager
 
-
-_keyboard_controller = Controller()
+import keyboard
 
 
 class MainWindow(QMainWindow):
@@ -81,10 +79,7 @@ class MainWindow(QMainWindow):
         self._is_dialog_visible = False
         if text:
             copy_to_clipboard(text)
-            QTimer.singleShot(150, self._simulate_paste)
+            QTimer.singleShot(200, self._simulate_paste)
 
     def _simulate_paste(self) -> None:
-        _keyboard_controller.press(Key.ctrl)
-        _keyboard_controller.press('v')
-        _keyboard_controller.release('v')
-        _keyboard_controller.release(Key.ctrl)
+        keyboard.send('ctrl+v')
